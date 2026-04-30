@@ -7,33 +7,65 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+app.get("/", (req, res) => {
+  res.send("Quiz API is running")
+})
+
+const syllabusMap = {
+  1: ["Introduction to C++", "Setting Up Environment", "Structure of C++ Program"],
+  2: ["Input and Output", "Variables", "Data Types"],
+  3: ["Operators", "Type Casting", "Constants and Keywords"],
+  4: ["If-else Statements", "Switch Case", "For Loop"],
+  5: ["While Loop", "Do-while Loop", "Function Basics"],
+  6: ["Arrays"],
+  final: [
+    "Introduction to C++",
+    "Setting Up Environment",
+    "Structure of C++ Program",
+    "Input and Output",
+    "Variables",
+    "Data Types",
+    "Operators",
+    "Type Casting",
+    "Constants and Keywords",
+    "If-else Statements",
+    "Switch Case",
+    "For Loop",
+    "While Loop",
+    "Do-while Loop",
+    "Function Basics",
+    "Arrays"
+  ]
+}
+
 app.post("/generate-quiz", async (req, res) => {
-  const { topics } = req.body
+  const { level } = req.body  // 1-6 or "final"
+
+  const topics = syllabusMap[level] || syllabusMap[1]
 
   try {
     const prompt = `
-You are a strict JSON generator.
+You are an expert C++ teacher.
 
-Generate 20 MCQs.
+Generate EXACTLY 20 beginner-level MCQs.
 
-Topics:
+IMPORTANT RULES:
+- Only EASY beginner questions
+- No advanced concepts
+- No tricky questions
+- Only based on given topics
+- Return ONLY valid JSON array
+
+TOPICS:
 ${topics.join(", ")}
 
-RULES:
-- return ONLY JSON array
-- each item must have:
-  question (string)
-  options (array of 4 strings)
-  answer (string)
-  hint (string)
-
-FORMAT ONLY:
+FORMAT:
 [
   {
     "question": "string",
     "options": ["A","B","C","D"],
     "answer": "A",
-    "hint": "string"
+    "hint": "simple hint"
   }
 ]
 `
@@ -53,11 +85,10 @@ FORMAT ONLY:
       }
     )
 
-    let text = response.data.choices[0].message.content
+    let text = response.data?.choices?.[0]?.message?.content || ""
 
     if (!text) return res.json([])
 
-    // clean
     text = text.replace(/```json/g, "").replace(/```/g, "").trim()
 
     let quiz = []
@@ -69,13 +100,16 @@ FORMAT ONLY:
       return res.json([])
     }
 
-    // FORCE CLEAN STRUCTURE
-    quiz = quiz.map(q => ({
-      question: q.question,
-      options: Array.isArray(q.options) ? q.options.slice(0, 4) : ["A", "B", "C", "D"],
-      answer: q.answer || "A",
-      hint: q.hint || "Think logically"
-    }))
+    quiz = quiz
+      .filter(q => q?.question)
+      .map(q => ({
+        question: String(q.question),
+        options: Array.isArray(q.options)
+          ? q.options.slice(0, 4)
+          : ["A", "B", "C", "D"],
+        answer: q.answer || "A",
+        hint: q.hint || "Think step by step"
+      }))
 
     res.json(quiz)
 
@@ -85,8 +119,7 @@ FORMAT ONLY:
   }
 })
 
-const PORT = process.env.PORT || 5000;
-
+const PORT = process.env.PORT || 5000
 app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
+  console.log("Server running on port " + PORT)
+})
