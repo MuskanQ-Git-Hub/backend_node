@@ -39,22 +39,21 @@ const syllabusMap = {
 }
 
 app.post("/generate-quiz", async (req, res) => {
-  const { level } = req.body  // 1-6 or "final"
-
-  const topics = syllabusMap[level] || syllabusMap[1]
-
   try {
+    const level = req.body.level || 1
+    const topics = syllabusMap[level] || syllabusMap[1]
+
     const prompt = `
-You are an expert C++ teacher.
+You are a STRICT beginner C++ teacher.
 
-Generate EXACTLY 20 beginner-level MCQs.
+Generate EXACTLY 20 MCQs.
 
-IMPORTANT RULES:
-- Only EASY beginner questions
-- No advanced concepts
-- No tricky questions
-- Only based on given topics
-- Return ONLY valid JSON array
+RULES:
+- Very easy beginner level only
+- No advanced questions
+- Return ONLY JSON array
+- NO explanation
+- NO markdown
 
 TOPICS:
 ${topics.join(", ")}
@@ -85,41 +84,53 @@ FORMAT:
       }
     )
 
-    let text = response.data?.choices?.[0]?.message?.content || ""
+    let text = response.data?.choices?.[0]?.message?.content
 
-    if (!text) return res.json([])
+    if (!text) {
+      return res.status(500).json({ error: "Empty AI response" })
+    }
 
+    // SAFE CLEANING
     text = text.replace(/```json/g, "").replace(/```/g, "").trim()
 
     let quiz = []
 
     try {
       quiz = JSON.parse(text)
-    } catch (e) {
-      console.log("RAW OUTPUT:", text)
-      return res.json([])
+    } catch (err) {
+      console.log("❌ JSON PARSE ERROR")
+      console.log(text)
+
+      return res.status(500).json({
+        error: "Invalid JSON from AI",
+        raw: text
+      })
     }
 
-    quiz = quiz
-      .filter(q => q?.question)
-      .map(q => ({
-        question: String(q.question),
-        options: Array.isArray(q.options)
-          ? q.options.slice(0, 4)
-          : ["A", "B", "C", "D"],
-        answer: q.answer || "A",
-        hint: q.hint || "Think step by step"
-      }))
+    // SAFE NORMALIZATION
+    quiz = quiz.map(q => ({
+      question: q.question || "No question",
+      options: Array.isArray(q.options)
+        ? q.options.slice(0, 4)
+        : ["A", "B", "C", "D"],
+      answer: q.answer || "A",
+      hint: q.hint || "Think step by step"
+    }))
 
     res.json(quiz)
 
   } catch (error) {
-    console.log(error.response?.data || error.message)
-    res.status(500).json({ error: "Quiz generation failed" })
+    console.log("❌ SERVER ERROR:", error.response?.data || error.message)
+
+    res.status(500).json({
+      error: "Quiz generation failed",
+      details: error.response?.data || error.message
+    })
   }
 })
 
 const PORT = process.env.PORT || 5000
+
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT)
 })
